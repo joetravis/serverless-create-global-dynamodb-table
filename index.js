@@ -31,6 +31,26 @@ const createAndTagTable = async function createAndTagTable(region, tableName, se
   }
 }
 
+const getCreateTableParams = async function (tableDef, tableName) {
+    let createTableParams = {
+        AttributeDefinitions: tableDef.Table.AttributeDefinitions,
+        KeySchema: tableDef.Table.KeySchema,
+        BillingMode: tableDef.Table.BillingMode,
+        ProvisionedThroughput: {ReadCapacityUnits, WriteCapacityUnits},
+        TableName: tableName,
+        StreamSpecification: {
+            StreamEnabled: true,
+            StreamViewType: 'NEW_AND_OLD_IMAGES',
+        },
+    }
+
+    if (tableDef.Table.BillingMode === 'PROVISIONED)') {
+        createTableParams.ProvisionedThroughput = tableDef.Table.ProvisionedThroughput
+    }
+
+    return createTableParams;
+}
+
 /**
  * This method sets up the global table in new region
  * 1. Checks if the global table already exists.
@@ -67,19 +87,9 @@ const createGlobalTable = async function createGlobalTable(
 
   const tableDef = await dynamodb.describeTable({ TableName: tableName }).promise()
 
-  const { ReadCapacityUnits, WriteCapacityUnits } = tableDef.Table.ProvisionedThroughput
-  const createTableParams = {
-    AttributeDefinitions: tableDef.Table.AttributeDefinitions,
-    KeySchema: tableDef.Table.KeySchema,
-    ProvisionedThroughput: { ReadCapacityUnits, WriteCapacityUnits },
-    TableName: tableName,
-    StreamSpecification: {
-      StreamEnabled: true,
-      StreamViewType: 'NEW_AND_OLD_IMAGES',
-    },
-  }
+    const createTableParams = getCreateTableParams(tableDef, tableName);
 
-  await Promise.all(newRegions.map(r => createAndTagTable(r, tableName, createTableParams, tags, cli, creds)))
+    await Promise.all(newRegions.map(r => createAndTagTable(r, tableName, createTableParams, tags, cli, creds)))
 
   const replicationGroup = [{ RegionName: region }]
   newRegions.forEach(r => replicationGroup.push({ RegionName: r }))
